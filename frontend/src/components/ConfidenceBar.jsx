@@ -1,0 +1,30 @@
+import { cn } from '../lib/cn'
+
+function toneFor(value) {
+  if (value > 0.7) return { bar: 'bg-ok', text: 'text-ok', label: 'high' }
+  if (value >= 0.4) return { bar: 'bg-warn', text: 'text-warn', label: 'moderate' }
+  return { bar: 'bg-danger', text: 'text-danger', label: 'low' }
+}
+
+export default function ConfidenceBar({ value, label = 'Confidence' }) {
+  const pct = Math.round(Math.min(1, Math.max(0, value ?? 0)) * 100)
+  const tone = toneFor(value ?? 0)
+
+  return (
+    <div>
+      <div className="flex items-baseline justify-between mb-1.5">
+        <span className="text-xs font-medium text-mist-300 uppercase tracking-wide">{label}</span>
+        <span className={cn('font-mono text-sm font-semibold', tone.text)}>
+          {pct}%
+          <span className="ml-1.5 text-[10px] font-sans font-normal uppercase text-mist-500">{tone.label}</span>
+        </span>
+      </div>
+      <div className="h-2 w-full overflow-hidden rounded-full bg-navy-700">
+        <div
+          className={cn('h-full rounded-full transition-all duration-700 ease-out', tone.bar)}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+    </div>
+  )
+}
