@@ -14,16 +14,18 @@ function formatLine(plan) {
   const tilingLabel =
     plan.tile_count > 1 ? `${rows}x${cols} tiling · ${plan.tile_count} patches aggregated` : '1 patch'
 
-  return `${gsd} m/px → model domain 10 m/px · ${factorLabel} · ${tilingLabel}`
+  return `${plan.path} · ${gsd} m/px → model domain 10 m/px · ${factorLabel} · ${tilingLabel}`
 }
 
 export default function NormalizationStrip({ plans }) {
   if (!plans?.length) return null
 
+  const distinctPlans = Array.from(new Map(plans.map((plan) => [plan.path, plan])).values())
+
   return (
     <div className="rounded-lg border border-navy-600 bg-navy-850 px-4 py-3">
-      <div className="space-y-1.5">
-        {plans.map((plan) => (
+      <div className="space-y-2">
+        {distinctPlans.map((plan) => (
           <p key={plan.path} className="font-mono text-[11px] leading-snug text-mist-300">
             <span className="text-teal-glow">▸</span> {formatLine(plan)}
           </p>

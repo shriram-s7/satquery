@@ -13,6 +13,13 @@ const INTENT_LABEL = {
   unknown: 'Unknown',
 }
 
+function formatSignal(sig) {
+  const match = /^image_count=(\d+)$/.exec(sig)
+  if (!match) return sig
+  const count = Number(match[1])
+  return `${count} image${count === 1 ? '' : 's'}`
+}
+
 function DownloadIcon() {
   return (
     <svg
@@ -60,7 +67,7 @@ export default function AnswerCard({ response, images }) {
   return (
     <div className="rounded-xl border border-navy-600 bg-navy-900 p-5">
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <span className="rounded-md border border-cyan-glow/40 bg-cyan-glow/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-cyan-glow">
+        <span className="rounded-md border border-cyan-glow/40 bg-cyan-glow/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-cyan-glow">
           {INTENT_LABEL[intent.intent] ?? intent.intent}
         </span>
         <span className="font-mono text-[11px] text-mist-500">
@@ -71,9 +78,9 @@ export default function AnswerCard({ response, images }) {
       <p className="text-[15px] leading-relaxed text-mist-100">{answer_text}</p>
 
       {intent.matched_signals?.length > 0 && (
-        <div className="mt-3 flex flex-wrap gap-1.5">
+        <div className="mt-3 flex flex-wrap gap-2">
           {intent.matched_signals.map((sig) => (
-            <Chip key={sig}>{sig}</Chip>
+            <Chip key={sig}>{formatSignal(sig)}</Chip>
           ))}
         </div>
       )}
@@ -97,7 +104,7 @@ export default function AnswerCard({ response, images }) {
           type="button"
           onClick={handleDownloadReport}
           disabled={downloadingReport}
-          className="inline-flex items-center gap-1.5 rounded-md border border-navy-500 bg-navy-850 px-3 py-1.5 text-xs font-medium text-mist-100 transition-colors hover:border-cyan-glow hover:text-cyan-glow disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex items-center gap-2 rounded-md border border-navy-500 bg-navy-850 px-3 py-2 text-xs font-medium text-mist-100 transition-colors hover:border-cyan-glow hover:text-cyan-glow disabled:cursor-not-allowed disabled:opacity-50"
         >
           <DownloadIcon />
           {downloadingReport ? 'Generating report…' : 'Download Report'}
@@ -105,7 +112,7 @@ export default function AnswerCard({ response, images }) {
         <button
           type="button"
           onClick={handleDownloadGeojson}
-          className="inline-flex items-center gap-1.5 rounded-md border border-navy-500 bg-navy-850 px-3 py-1.5 text-xs font-medium text-mist-100 transition-colors hover:border-cyan-glow hover:text-cyan-glow"
+          className="inline-flex items-center gap-2 rounded-md border border-navy-500 bg-navy-850 px-3 py-2 text-xs font-medium text-mist-100 transition-colors hover:border-cyan-glow hover:text-cyan-glow"
         >
           <DownloadIcon />
           Download GeoJSON

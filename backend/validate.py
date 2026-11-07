@@ -1,6 +1,7 @@
 """Trust Gate: input validation and typed rejections for uploaded imagery."""
 from dataclasses import dataclass
 from enum import Enum
+from pathlib import Path
 from typing import List, Optional, Union
 
 from backend.geo import RasterInfo, guess_modality, spatial_overlap
@@ -36,9 +37,15 @@ class UnreadableRaster:
     """Placeholder for a file that failed to open; callers build this from a caught exception."""
     path: str
     error: str
+    display_name: Optional[str] = None
 
 
 RasterLike = Union[RasterInfo, UnreadableRaster]
+
+
+def _display(item: RasterLike) -> str:
+    name = getattr(item, "display_name", None)
+    return name or Path(item.path).name
 
 
 def _centroid(info: RasterInfo):
@@ -73,7 +80,7 @@ def validate_inputs(rasters: List[RasterLike], query: str, intent: str) -> List[
             results.append(ValidationResult(
                 ok=False,
                 code=RejectionCode.UNREADABLE,
-                message=f"REJECTED — {label} ('{item.path}') could not be opened: {item.error}",
+                message=f"REJECTED — {label} ('{_display(item)}') could not be opened: {item.error}",
                 remedy="Re-export the file as a valid GeoTIFF/PNG and re-upload; "
                        "the file may be truncated or corrupted.",
                 severity="reject",
@@ -86,7 +93,7 @@ def validate_inputs(rasters: List[RasterLike], query: str, intent: str) -> List[
             results.append(ValidationResult(
                 ok=False,
                 code=RejectionCode.NOT_GEOSPATIAL,
-                message=f"REJECTED — {label} ('{info.path}') has no usable CRS/geotransform "
+                message=f"REJECTED — {label} ('{_display(info)}') has no usable CRS/geotransform "
                         f"(crs={info.crs}, has_geo={info.has_geo}); it cannot be geolocated.",
                 remedy="Upload a georeferenced GeoTIFF (with an embedded CRS and transform) "
                        "instead of a plain image.",
@@ -99,7 +106,7 @@ def validate_inputs(rasters: List[RasterLike], query: str, intent: str) -> List[
             results.append(ValidationResult(
                 ok=False,
                 code=RejectionCode.BAND_COUNT_UNSUPPORTED,
-                message=f"REJECTED — {label} ('{info.path}') has {info.band_count} band(s) of "
+                message=f"REJECTED — {label} ('{_display(info)}') has {info.band_count} band(s) of "
                         f"dtype '{info.dtype}', which matches no supported modality "
                         f"(3-band uint8 optical RGB, 1-band float32 SAR, >=4-band uint16 "
                         f"multispectral, 1-band uint8/uint16 panchromatic).",
@@ -113,7 +120,7 @@ def validate_inputs(rasters: List[RasterLike], query: str, intent: str) -> List[
                 results.append(ValidationResult(
                     ok=False,
                     code=RejectionCode.RESOLUTION_OUT_OF_RANGE,
-                    message=f"REJECTED — {label} ('{info.path}') has GSD {gx:.3f}m x {gy:.3f}m, "
+                    message=f"REJECTED — {label} ('{_display(info)}') has GSD {gx:.3f}m x {gy:.3f}m, "
                             f"outside the supported range of {MIN_GSD_M}m-{MAX_GSD_M}m.",
                     remedy=f"Provide imagery with a GSD between {MIN_GSD_M}m and {MAX_GSD_M}m, "
                            f"or resample it before upload.",

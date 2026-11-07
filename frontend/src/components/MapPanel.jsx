@@ -52,7 +52,7 @@ export default function MapPanel({ geojson, resultVersion, fallbackCentroid }) {
 
   return (
     <div className="overflow-hidden rounded-xl border border-navy-600 bg-navy-900">
-      <div className="border-b border-navy-700 px-4 py-2.5">
+      <div className="border-b border-navy-700 px-4 py-3">
         <h3 className="text-xs font-semibold uppercase tracking-wide text-mist-300">Geospatial context</h3>
       </div>
       <div className="h-72">

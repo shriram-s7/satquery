@@ -15,8 +15,8 @@ export default function MetadataCard({ meta, loading, error }) {
       <div className="mt-2 animate-pulse rounded-lg border border-navy-600 bg-navy-850 p-3">
         <div className="h-3 w-2/3 rounded bg-navy-700" />
         <div className="mt-2 h-2 w-full rounded bg-navy-700" />
-        <div className="mt-1.5 h-2 w-5/6 rounded bg-navy-700" />
-        <div className="mt-1.5 h-2 w-4/6 rounded bg-navy-700" />
+        <div className="mt-2 h-2 w-5/6 rounded bg-navy-700" />
+        <div className="mt-2 h-2 w-4/6 rounded bg-navy-700" />
       </div>
     )
   }

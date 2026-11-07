@@ -11,7 +11,7 @@ export default function Chip({ children, tone = 'default' }) {
   return (
     <span
       className={cn(
-        'inline-flex items-center rounded-full border px-2.5 py-1 font-mono text-[11px] leading-none',
+        'inline-flex items-center rounded-full border px-3 py-1 font-mono text-[11px] leading-none',
         tones[tone] ?? tones.default,
       )}
     >

@@ -2,7 +2,7 @@
 import dataclasses
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 
 from backend.geo import RasterInfo, bbox_to_geojson, read_raster
 from backend.gsd import (
@@ -11,11 +11,12 @@ from backend.gsd import (
     Tile,
     aggregate_tile_results,
     apply_normalization,
+    pair_tiles,
     plan_normalization,
 )
 from backend.intent import IntentResult, classify_intent
 from backend.models.stub import run_model
-from backend.validate import UnreadableRaster, ValidationResult, validate_inputs
+from backend.validate import PAIR_INTENTS, UnreadableRaster, ValidationResult, validate_inputs
 
 
 @dataclass
@@ -33,6 +34,13 @@ class QueryResponse:
 
 def _trace(step: str, detail: str, start: float) -> Dict[str, Any]:
     return {"step": step, "detail": detail, "duration_ms": round((time.perf_counter() - start) * 1000, 2)}
+
+
+def _humanize_signal(sig: str) -> str:
+    if sig.startswith("image_count="):
+        count = int(sig.split("=", 1)[1])
+        return f"{count} image{'s' if count != 1 else ''}"
+    return sig
 
 
 def _tile_raster_info(tile: Tile) -> RasterInfo:
@@ -53,16 +61,18 @@ def _tile_raster_info(tile: Tile) -> RasterInfo:
     )
 
 
-def run_query(files: List[str], query: str) -> QueryResponse:
+def run_query(files: List[Tuple[str, str]], query: str) -> QueryResponse:
     trace: List[Dict[str, Any]] = []
 
     t0 = time.perf_counter()
     rasters = []
-    for path in files:
+    for path, display_name in files:
         try:
-            rasters.append(read_raster(path))
+            rasters.append(read_raster(path, display_name=display_name))
         except Exception as e:
-            rasters.append(UnreadableRaster(path=str(path), error=f"{type(e).__name__}: {e}"))
+            rasters.append(UnreadableRaster(
+                path=str(path), error=f"{type(e).__name__}: {e}", display_name=display_name,
+            ))
     ok_count = sum(1 for r in rasters if isinstance(r, RasterInfo))
     bad_count = len(rasters) - ok_count
     trace.append(_trace(
@@ -71,10 +81,11 @@ def run_query(files: List[str], query: str) -> QueryResponse:
 
     t0 = time.perf_counter()
     intent_result = classify_intent(query, image_count=len(files))
+    readable_signals = [_humanize_signal(s) for s in intent_result.matched_signals]
     trace.append(_trace(
         "classify_intent",
         f"intent={intent_result.intent} confidence={intent_result.confidence} "
-        f"method={intent_result.method} signals={intent_result.matched_signals}",
+        f"method={intent_result.method} signals={readable_signals}",
         t0,
     ))
 
@@ -104,33 +115,52 @@ def run_query(files: List[str], query: str) -> QueryResponse:
 
     t0 = time.perf_counter()
     normalization_plans: List[Dict[str, Any]] = []
-    all_tiles: List[tuple] = []
+    tiles_by_image: List[Tuple[RasterInfo, List[Tile]]] = []
     for info in valid_infos:
         plan = plan_normalization(info)
         tiles = apply_normalization(info, plan)
-        normalization_plans.append({"path": info.path, **dataclasses.asdict(plan)})
-        for tile in tiles:
-            all_tiles.append((info, tile))
+        normalization_plans.append({"path": info.display_name, **dataclasses.asdict(plan)})
+        tiles_by_image.append((info, tiles))
+    total_tile_count = sum(len(tiles) for _, tiles in tiles_by_image)
     trace.append(_trace(
         "gsd_normalize",
-        f"Normalized {len(valid_infos)} image(s) into {len(all_tiles)} total tile(s).",
+        f"Normalized {len(valid_infos)} image(s) into {total_tile_count} total tile(s).",
         t0,
     ))
 
-    # TODO(real-model): once a real model is wired in, tiles from paired images
-    # (change_detection / fusion) should be matched by tile_index and passed to the
-    # model together. The stub ignores tile content, so each tile is scored
-    # independently for now.
-    t0 = time.perf_counter()
+    is_pair_task = intent_result.intent in PAIR_INTENTS
+
     tile_outputs = []
-    for info, tile in all_tiles:
-        output = run_model(task=intent_result.intent, tiles=[tile], query=query)
-        tile_outputs.append((info, tile, output))
-    trace.append(_trace(
-        "run_model",
-        f"Ran stub model on {len(tile_outputs)} tile(s), task={intent_result.intent}.",
-        t0,
-    ))
+    if is_pair_task:
+        (info_a, tiles_a), (info_b, tiles_b) = tiles_by_image
+        t0 = time.perf_counter()
+        pairs = pair_tiles(tiles_a, tiles_b)
+        trace.append(_trace(
+            "pair_tiles",
+            f"Formed {len(pairs)} T1/T2 tile pair(s) from {info_a.display_name} and {info_b.display_name}.",
+            t0,
+        ))
+
+        t0 = time.perf_counter()
+        for tile_a, tile_b in pairs:
+            output = run_model(task=intent_result.intent, query=query, tile_pairs=[(tile_a, tile_b)])
+            tile_outputs.append((info_b, tile_b, output))
+        trace.append(_trace(
+            "run_model",
+            f"Ran stub model on {len(pairs)} tile pair(s), task={intent_result.intent}.",
+            t0,
+        ))
+    else:
+        t0 = time.perf_counter()
+        for info, tiles in tiles_by_image:
+            for tile in tiles:
+                output = run_model(task=intent_result.intent, query=query, tiles=[tile])
+                tile_outputs.append((info, tile, output))
+        trace.append(_trace(
+            "run_model",
+            f"Ran stub model on {len(tile_outputs)} tile(s), task={intent_result.intent}.",
+            t0,
+        ))
 
     t0 = time.perf_counter()
     tiles_only = [tile for _, tile, _ in tile_outputs]
@@ -151,14 +181,14 @@ def run_query(files: List[str], query: str) -> QueryResponse:
             fc_feature = bbox_to_geojson(tile_info, bbox)
             fc_feature["properties"] = {
                 "tile_index": list(tile.tile_index),
-                "source_image": info.path,
+                "source_image": info.display_name,
                 "confidence": output.confidence,
                 "task": intent_result.intent,
             }
             features.append(fc_feature)
             overlay_regions.append({
                 "tile_index": list(tile.tile_index),
-                "source_image": info.path,
+                "source_image": info.display_name,
                 "bbox_px": list(bbox),
                 "bbox_wgs84": fc_feature["geometry"]["coordinates"][0],
                 "confidence": output.confidence,
@@ -183,7 +213,7 @@ def run_query(files: List[str], query: str) -> QueryResponse:
         answer_text = tile_outputs[0][2].answer_text
     elif tile_outputs:
         answer_text = " | ".join(
-            f"[{info.path} tile{tile.tile_index}] {output.answer_text}"
+            f"[{info.display_name} tile{tile.tile_index}] {output.answer_text}"
             for info, tile, output in tile_outputs
         )
     else:

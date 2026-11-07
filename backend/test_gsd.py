@@ -12,6 +12,7 @@ from backend.gsd import (
     MODEL_PATCH_PX,
     aggregate_tile_results,
     apply_normalization,
+    pair_tiles,
     plan_normalization,
 )
 
@@ -21,6 +22,11 @@ FIXTURES_DIR = Path(__file__).resolve().parent.parent / "fixtures"
 @pytest.fixture(scope="module")
 def optical_t1():
     return read_raster(FIXTURES_DIR / "optical_t1.tif")
+
+
+@pytest.fixture(scope="module")
+def optical_t2():
+    return read_raster(FIXTURES_DIR / "optical_t2.tif")
 
 
 @pytest.fixture(scope="module")
@@ -105,6 +111,29 @@ def test_apply_normalization_optical_t1_single_padded_tile(optical_t1):
     non_nodata_px = np.count_nonzero(tile.array[0])
     assert 0 < non_nodata_px < tile.array[0].size
 
+    row_min, col_min, row_max, col_max = tile.valid_region_px
+    assert row_min == 0 and col_min == 0
+    assert 0 < row_max < MODEL_PATCH_PX
+    assert 0 < col_max < MODEL_PATCH_PX
+
+
+def test_apply_normalization_effective_gsd_matches_model_native(optical_t1, sentinel_like):
+    for info in (optical_t1, sentinel_like):
+        plan = plan_normalization(info)
+        for tile in apply_normalization(info, plan):
+            px_w = abs(tile.transform.a)
+            px_h = abs(tile.transform.e)
+            assert px_w == pytest.approx(MODEL_NATIVE_GSD, rel=0.01)
+            assert px_h == pytest.approx(MODEL_NATIVE_GSD, rel=0.01)
+
+
+def test_apply_normalization_sentinel_like_no_padding():
+    info = read_raster(FIXTURES_DIR / "sentinel_like.tif")
+    plan = plan_normalization(info)
+    tile = apply_normalization(info, plan)[0]
+
+    assert tile.valid_region_px == (0, 0, MODEL_PATCH_PX, MODEL_PATCH_PX)
+
 
 def test_aggregate_tile_results_merges_classes_and_confidence(sentinel_like):
     plan = plan_normalization(sentinel_like)
@@ -143,3 +172,41 @@ def test_aggregate_tile_results_multi_tile_union_and_mean():
 def test_aggregate_tile_results_length_mismatch_raises():
     with pytest.raises(ValueError):
         aggregate_tile_results([1, 2], [{"classes": []}])
+
+
+class _FakeTile:
+    def __init__(self, idx):
+        self.tile_index = idx
+
+
+def test_pair_tiles_matches_by_row_col_regardless_of_order():
+    tiles_a = [_FakeTile((0, 0)), _FakeTile((0, 1))]
+    tiles_b = [_FakeTile((0, 1)), _FakeTile((0, 0))]
+
+    pairs = pair_tiles(tiles_a, tiles_b)
+
+    assert len(pairs) == 2
+    assert [p[0].tile_index for p in pairs] == [(0, 0), (0, 1)]
+    assert [p[1].tile_index for p in pairs] == [(0, 0), (0, 1)]
+    for tile_a, tile_b in pairs:
+        assert tile_a.tile_index == tile_b.tile_index
+
+
+def test_pair_tiles_mismatched_grids_raises():
+    tiles_a = [_FakeTile((0, 0)), _FakeTile((0, 1))]
+    tiles_b = [_FakeTile((0, 0))]
+
+    with pytest.raises(ValueError):
+        pair_tiles(tiles_a, tiles_b)
+
+
+def test_pair_tiles_real_single_tile_images(optical_t1, optical_t2):
+    tiles_a = apply_normalization(optical_t1, plan_normalization(optical_t1))
+    tiles_b = apply_normalization(optical_t2, plan_normalization(optical_t2))
+
+    pairs = pair_tiles(tiles_a, tiles_b)
+
+    assert len(pairs) == 1
+    tile_a, tile_b = pairs[0]
+    assert tile_a.tile_index == (0, 0)
+    assert tile_b.tile_index == (0, 0)

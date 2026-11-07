@@ -80,7 +80,7 @@ async def handle_inspect(file: UploadFile = File(...)):
         dest.write_bytes(await file.read())
 
         try:
-            info = read_raster(str(dest))
+            info = read_raster(str(dest), display_name=file.filename)
             preview_data_url = render_preview_data_url(str(dest))
         except Exception as e:
             raise HTTPException(status_code=422, detail=f"{type(e).__name__}: {e}")
@@ -112,13 +112,13 @@ async def handle_query(files: List[UploadFile] = File(...), query: str = Form(..
         raise HTTPException(status_code=400, detail="SatQuery accepts 1-2 images per query.")
 
     with tempfile.TemporaryDirectory() as tmp_dir:
-        saved_paths = []
+        saved_files = []
         for upload in files:
             dest = Path(tmp_dir) / upload.filename
             dest.write_bytes(await upload.read())
-            saved_paths.append(str(dest))
+            saved_files.append((str(dest), upload.filename))
 
-        return run_query(saved_paths, query)
+        return run_query(saved_files, query)
 
 
 @app.post("/api/report")

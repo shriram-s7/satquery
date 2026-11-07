@@ -8,12 +8,17 @@ export default function Header({ backendOnline }) {
           SQ
         </div>
         <div>
-          <h1 className="text-sm font-semibold tracking-wide text-mist-100">SatQuery AI</h1>
-          <p className="text-[11px] text-mist-500">SIH 2026 · PS 26167 · ISRO</p>
+          <div className="flex items-center gap-2">
+            <h1 className="text-sm font-semibold tracking-wide text-mist-100">SatQuery AI</h1>
+            <span className="rounded-full border border-navy-500 bg-navy-850 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide text-mist-400">
+              PS 26167 · ISRO
+            </span>
+          </div>
+          <p className="text-[11px] text-mist-500">SIH 2026</p>
         </div>
       </div>
 
-      <div className="flex items-center gap-2 rounded-full border border-navy-600 bg-navy-850 px-3 py-1.5">
+      <div className="flex items-center gap-2 rounded-full border border-navy-600 bg-navy-850 px-3 py-2">
         <span
           className={cn(
             'h-1.5 w-1.5 rounded-full',

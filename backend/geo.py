@@ -1,6 +1,7 @@
 """Real geospatial primitives for SatQuery: CRS, GSD, bounds, overlap, pixel<->lonlat."""
 import math
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
 import rasterio
@@ -27,6 +28,7 @@ class RasterInfo:
     gsd_metres: Optional[Tuple[float, float]]
     has_geo: bool
     nodata: Optional[float]
+    display_name: str = ""
 
 
 def _crs_to_epsg_string(crs: CRS) -> str:
@@ -62,8 +64,9 @@ def _compute_gsd_metres(crs: CRS, transform: Affine, width: int, height: int) ->
     return (abs(transform.a) * unit_factor, abs(transform.e) * unit_factor)
 
 
-def read_raster(path) -> RasterInfo:
+def read_raster(path, display_name: Optional[str] = None) -> RasterInfo:
     path_str = str(path)
+    resolved_display_name = display_name if display_name is not None else Path(path_str).name
     with rasterio.open(path_str) as ds:
         crs = ds.crs
         transform = ds.transform
@@ -80,6 +83,7 @@ def read_raster(path) -> RasterInfo:
 
         return RasterInfo(
             path=path_str,
+            display_name=resolved_display_name,
             driver=ds.driver,
             crs=crs_str,
             width=ds.width,

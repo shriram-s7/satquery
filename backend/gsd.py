@@ -37,6 +37,29 @@ class Tile:
     tile_index: Tuple[int, int]
     transform: Affine
     crs: str
+    valid_region_px: Tuple[int, int, int, int]  # (row_min, col_min, row_max, col_max), local tile coords
+
+
+def _resampling_for(scale_factor: float) -> Resampling:
+    return Resampling.bilinear if scale_factor >= 1.0 else Resampling.average
+
+
+def _single_patch_valid_note(ground_width_km: float, ground_height_km: float, resampling: Resampling) -> str:
+    valid_w = min(MODEL_PATCH_PX, math.ceil(ground_width_km * 1000.0 / MODEL_NATIVE_GSD))
+    valid_h = min(MODEL_PATCH_PX, math.ceil(ground_height_km * 1000.0 / MODEL_NATIVE_GSD))
+
+    resample_note = f"Resampled to {MODEL_NATIVE_GSD:.1f} m/px ({valid_w}x{valid_h} px, Resampling.{resampling.name})"
+
+    if valid_w < MODEL_PATCH_PX or valid_h < MODEL_PATCH_PX:
+        pct = 100.0 * (valid_w * valid_h) / (MODEL_PATCH_PX * MODEL_PATCH_PX)
+        padding_note = (
+            f", padded to the {MODEL_PATCH_PX}x{MODEL_PATCH_PX} model patch size. "
+            f"Valid region: {valid_w}x{valid_h} px ({pct:.1f}% of patch)."
+        )
+    else:
+        padding_note = f", exactly filling the {MODEL_PATCH_PX}x{MODEL_PATCH_PX} model patch (no padding)."
+
+    return f"{resample_note}{padding_note} Effective output GSD: {MODEL_NATIVE_GSD:.1f} m/px."
 
 
 def plan_normalization(info: RasterInfo) -> NormalizationPlan:
@@ -50,15 +73,13 @@ def plan_normalization(info: RasterInfo) -> NormalizationPlan:
     ground_width_km = info.width * gsd_x / 1000.0
     ground_height_km = info.height * gsd_y / 1000.0
     ground_coverage_km = (ground_width_km, ground_height_km)
+    footprint_note = f"Input GSD {input_gsd:.2f} m/px, scene footprint {ground_width_km * 1000:.1f} x {ground_height_km * 1000:.1f} m."
 
     if 0.5 <= scale_factor <= 2.0:
         strategy = "passthrough"
         tile_grid = (1, 1)
-        rationale = (
-            f"Input GSD {input_gsd:.2f} m is within 0.5x-2x of the model's native "
-            f"{MODEL_NATIVE_GSD:.0f} m resolution (scale factor {scale_factor:.2f}); "
-            f"passed through as a single canonical {MODEL_PATCH_PX}x{MODEL_PATCH_PX} patch."
-        )
+        resampling = _resampling_for(scale_factor)
+        rationale = f"{footprint_note} {_single_patch_valid_note(ground_width_km, ground_height_km, resampling)}"
     elif scale_factor < 0.5:
         exceeds_one_patch = (
             ground_width_km * 1000.0 > PATCH_GROUND_M or ground_height_km * 1000.0 > PATCH_GROUND_M
@@ -69,30 +90,19 @@ def plan_normalization(info: RasterInfo) -> NormalizationPlan:
             rows = max(1, math.ceil(ground_height_km * 1000.0 / PATCH_GROUND_M))
             tile_grid = (rows, cols)
             rationale = (
-                f"Input GSD {input_gsd:.2f} m is much finer than the model's "
-                f"{MODEL_NATIVE_GSD:.0f} m training resolution (scale factor {scale_factor:.3f}), and the "
-                f"scene's {ground_width_km:.2f}x{ground_height_km:.2f} km footprint exceeds one "
-                f"{PATCH_GROUND_M / 1000:.2f} km model patch, so it is downsampled and tiled into a "
-                f"{rows}x{cols} grid to avoid losing ground detail."
+                f"{footprint_note} It exceeds one {PATCH_GROUND_M / 1000:.2f} km model patch, so it is "
+                f"resampled to {MODEL_NATIVE_GSD:.1f} m/px (Resampling.average) and tiled into a {rows}x{cols} "
+                f"grid of {MODEL_PATCH_PX}x{MODEL_PATCH_PX} patches; edge tiles are padded where the scene "
+                f"doesn't fill the full patch. Effective output GSD: {MODEL_NATIVE_GSD:.1f} m/px."
             )
         else:
             strategy = "downsample"
             tile_grid = (1, 1)
-            rationale = (
-                f"Input GSD {input_gsd:.2f} m is much finer than the model's "
-                f"{MODEL_NATIVE_GSD:.0f} m training resolution (scale factor {scale_factor:.3f}), but the "
-                f"scene's {ground_width_km:.2f}x{ground_height_km:.2f} km footprint fits inside one "
-                f"{PATCH_GROUND_M / 1000:.2f} km model patch, so it is downsampled into a single "
-                f"{MODEL_PATCH_PX}x{MODEL_PATCH_PX} patch."
-            )
+            rationale = f"{footprint_note} {_single_patch_valid_note(ground_width_km, ground_height_km, Resampling.average)}"
     else:
         strategy = "upsample"
         tile_grid = (1, 1)
-        rationale = (
-            f"Input GSD {input_gsd:.2f} m is coarser than the model's {MODEL_NATIVE_GSD:.0f} m training "
-            f"resolution (scale factor {scale_factor:.2f}), so it is upsampled via bilinear interpolation "
-            f"to match the training domain."
-        )
+        rationale = f"{footprint_note} {_single_patch_valid_note(ground_width_km, ground_height_km, Resampling.bilinear)}"
 
     tile_count = tile_grid[0] * tile_grid[1]
 
@@ -117,6 +127,14 @@ def _target_crs(info: RasterInfo) -> CRS:
     return crs
 
 
+def _tile_valid_region_px(row0: int, col0: int, src_height_px: float, src_width_px: float) -> Tuple[int, int, int, int]:
+    row_min = 0
+    col_min = 0
+    row_max = min(MODEL_PATCH_PX, max(0, math.ceil(src_height_px - row0)))
+    col_max = min(MODEL_PATCH_PX, max(0, math.ceil(src_width_px - col0)))
+    return (row_min, col_min, row_max, col_max)
+
+
 def apply_normalization(info: RasterInfo, plan: NormalizationPlan) -> List[Tile]:
     rows, cols = plan.tile_grid
     resampling = Resampling.bilinear if plan.scale_factor >= 1.0 else Resampling.average
@@ -126,6 +144,12 @@ def apply_normalization(info: RasterInfo, plan: NormalizationPlan) -> List[Tile]
 
     left, bottom, right, top = transform_bounds(src_crs, target_crs, *info.bounds_native)
     grid_transform = Affine(MODEL_NATIVE_GSD, 0, left, 0, -MODEL_NATIVE_GSD, top)
+
+    # The grid is anchored at the source's own reprojected top-left corner, so the
+    # source's real (non-padded) data always spans grid pixels [0, src_height_px) x
+    # [0, src_width_px) at MODEL_NATIVE_GSD — used below to mark padding per tile.
+    src_height_px = (top - bottom) / MODEL_NATIVE_GSD
+    src_width_px = (right - left) / MODEL_NATIVE_GSD
 
     total_width_px = cols * MODEL_PATCH_PX
     total_height_px = rows * MODEL_PATCH_PX
@@ -162,9 +186,23 @@ def apply_normalization(info: RasterInfo, plan: NormalizationPlan) -> List[Tile]
                 tile_index=(r, c),
                 transform=tile_transform,
                 crs=target_crs_str,
+                valid_region_px=_tile_valid_region_px(row0, col0, src_height_px, src_width_px),
             ))
 
     return tiles
+
+
+def pair_tiles(tiles_a: List[Tile], tiles_b: List[Tile]) -> List[Tuple[Tile, Tile]]:
+    grid_a = {tile.tile_index for tile in tiles_a}
+    grid_b = {tile.tile_index for tile in tiles_b}
+    if grid_a != grid_b:
+        raise ValueError(
+            f"Cannot pair tiles: tile grids differ between the two images "
+            f"({sorted(grid_a)} vs {sorted(grid_b)})."
+        )
+
+    by_index_b = {tile.tile_index: tile for tile in tiles_b}
+    return [(tile_a, by_index_b[tile_a.tile_index]) for tile_a in sorted(tiles_a, key=lambda t: t.tile_index)]
 
 
 def aggregate_tile_results(tiles: List[Tile], results: List[Dict[str, Any]]) -> Dict[str, Any]:

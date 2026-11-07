@@ -26,6 +26,10 @@
   --color-danger: #f87171;
 }
 
+html {
+  font-size: 110%;
+}
+
 html,
 body,
 #root {

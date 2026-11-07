@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 
 const MAX_CANVAS_DIM = 720
+const DISPLAY_HEIGHT = 340
 
 function project(lon, lat, bounds) {
   const [west, south, east, north] = bounds
@@ -48,7 +49,7 @@ export default function EvidenceCanvas({ imageSrc, imageBounds, regions }) {
 
     ctx.lineWidth = 2
     ctx.strokeStyle = '#22d3ee'
-    ctx.font = '600 11px "JetBrains Mono", monospace'
+    ctx.font = '600 12px "JetBrains Mono", monospace'
 
     regions.forEach((region, idx) => {
       const ring = region.bbox_wgs84
@@ -69,22 +70,26 @@ export default function EvidenceCanvas({ imageSrc, imageBounds, regions }) {
       ctx.strokeRect(rx, ry, rw, rh)
 
       const tag = `#${idx + 1} · ${(region.confidence ?? 0).toFixed(2)}`
-      const tagW = ctx.measureText(tag).width + 8
-      const tagY = Math.max(0, ry - 16)
+      const tagPad = 2
+      const tagW = ctx.measureText(tag).width + tagPad * 2
+      const tagH = 12 + tagPad * 2
+      const tagX = Math.min(Math.max(rx, 0), Math.max(0, w - tagW))
+      const tagY = Math.max(0, ry - tagH)
       ctx.fillStyle = '#04070d'
-      ctx.fillRect(rx, tagY, tagW, 16)
+      ctx.fillRect(tagX, tagY, tagW, tagH)
       ctx.fillStyle = '#22d3ee'
-      ctx.fillText(tag, rx + 4, tagY + 11.5)
+      ctx.fillText(tag, tagX + tagPad, tagY + tagH - tagPad - 3)
     })
   }, [img, imageBounds, regions])
 
   return (
-    <div className="relative overflow-hidden rounded-lg border border-navy-600 bg-navy-950">
-      <canvas ref={canvasRef} className={img ? 'block h-auto w-full' : 'hidden'} />
+    <div
+      className="relative flex items-center justify-center overflow-hidden rounded-lg border border-navy-600 bg-navy-950"
+      style={{ height: DISPLAY_HEIGHT }}
+    >
+      <canvas ref={canvasRef} className={img ? 'block h-full w-full object-contain' : 'hidden'} />
       {!img && (
-        <div className="flex aspect-square w-full items-center justify-center text-xs text-mist-500">
-          {imageSrc ? 'Loading imagery…' : 'No preview available'}
-        </div>
+        <div className="text-xs text-mist-500">{imageSrc ? 'Loading imagery…' : 'No preview available'}</div>
       )}
     </div>
   )

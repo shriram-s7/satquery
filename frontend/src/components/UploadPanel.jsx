@@ -1,25 +1,46 @@
 import DropZone from './DropZone'
 import MetadataCard from './MetadataCard'
 
-export default function UploadPanel({ slotA, slotB, onFile, query, onQueryChange, onAnalyse, analysing, canAnalyse }) {
+export default function UploadPanel({
+  slotA,
+  slotB,
+  onFile,
+  onRemoveFile,
+  query,
+  onQueryChange,
+  onAnalyse,
+  analysing,
+  canAnalyse,
+}) {
   return (
-    <section className="flex h-full flex-col rounded-xl border border-navy-600 bg-navy-900 p-5">
-      <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-mist-300">Imagery</h2>
+    <section className="flex h-full min-h-0 flex-col rounded-xl border border-navy-600 bg-navy-900 p-5">
+      <h2 className="mb-4 shrink-0 text-sm font-semibold uppercase tracking-wide text-mist-300">Imagery</h2>
 
-      <div className="space-y-5">
+      <div className="min-h-0 flex-1 space-y-5 overflow-y-auto pr-1">
         <div>
-          <DropZone label="Image A / T1" file={slotA.file} onFile={(f) => onFile('A', f)} />
+          <DropZone
+            label="Image A / T1"
+            file={slotA.file}
+            onFile={(f) => onFile('A', f)}
+            onRemove={() => onRemoveFile('A')}
+          />
           <MetadataCard meta={slotA.meta} loading={slotA.loading} error={slotA.error} />
         </div>
 
         <div>
-          <DropZone label="Image B / T2" sublabel="optional" file={slotB.file} onFile={(f) => onFile('B', f)} />
+          <DropZone
+            label="Image B / T2"
+            sublabel="optional"
+            file={slotB.file}
+            onFile={(f) => onFile('B', f)}
+            onRemove={() => onRemoveFile('B')}
+          />
           <MetadataCard meta={slotB.meta} loading={slotB.loading} error={slotB.error} />
         </div>
       </div>
 
-      <div className="mt-6 border-t border-navy-700 pt-5">
-        <label htmlFor="query" className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-mist-300">
+      <div className="mt-6 shrink-0 border-t border-navy-700 pt-5">
+        <label htmlFor="query" className="mb-2 block text-xs font-semibold uppercase tracking-wide text-mist-300">
           Query
         </label>
         <textarea
@@ -35,7 +56,7 @@ export default function UploadPanel({ slotA, slotB, onFile, query, onQueryChange
           type="button"
           onClick={onAnalyse}
           disabled={!canAnalyse || analysing}
-          className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-cyan-glow px-4 py-2.5 text-sm font-semibold text-navy-950 transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+          className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-cyan-glow px-4 py-3 text-sm font-semibold text-navy-950 transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
         >
           {analysing && (
             <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-navy-950/30 border-t-navy-950" />

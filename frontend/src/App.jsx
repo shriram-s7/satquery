@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { checkHealth, inspectFile, runQuery } from './api'
+import { cn } from './lib/cn'
 import AnswerCard from './components/AnswerCard'
 import EvidencePanel from './components/EvidencePanel'
 import Header from './components/Header'
@@ -12,13 +13,75 @@ import UploadPanel from './components/UploadPanel'
 const EMPTY_SLOT = { file: null, meta: null, loading: false, error: null }
 const EMPTY_GEOJSON = { type: 'FeatureCollection', features: [] }
 
-function EmptyState() {
+function UploadIcon({ className }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      className={className}
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 8.25 12 3.75m0 0L7.5 8.25M12 3.75v12.75"
+      />
+    </svg>
+  )
+}
+
+function EmptyState({ compact = false }) {
+  if (compact) {
+    return (
+      <div className="flex h-full min-h-[24rem] flex-col items-center justify-center rounded-xl border border-dashed border-navy-600 bg-navy-900 px-8 text-center">
+        <UploadIcon className="mb-3 h-8 w-8 text-mist-500" />
+        <p className="text-sm text-mist-300">Upload 1–2 geospatial images to begin.</p>
+      </div>
+    )
+  }
   return (
     <div className="flex h-full min-h-[24rem] flex-col items-center justify-center rounded-xl border border-dashed border-navy-600 bg-navy-900 px-8 text-center">
-      <p className="text-sm text-mist-300">Upload Image A and enter a query to begin.</p>
-      <p className="mt-1 text-xs text-mist-500">
+      <p className="text-sm text-mist-300">Enter a query and run Analyse to begin.</p>
+      <p className="mt-2 text-xs text-mist-500">
         Evidence, confidence, and geospatial context will appear here once analysis runs.
       </p>
+    </div>
+  )
+}
+
+function SkeletonBlock({ className }) {
+  return <div className={cn('animate-pulse rounded-lg bg-navy-700/60', className)} />
+}
+
+function EvidenceSkeleton() {
+  return (
+    <div className="rounded-xl border border-navy-600 bg-navy-900 p-4">
+      <div className="mb-3 flex items-center justify-between">
+        <SkeletonBlock className="h-3 w-20" />
+        <SkeletonBlock className="h-6 w-16" />
+      </div>
+      <SkeletonBlock className="h-[340px] w-full" />
+      <SkeletonBlock className="mt-2 h-2.5 w-1/3" />
+    </div>
+  )
+}
+
+function AnswerSkeleton() {
+  return (
+    <div className="rounded-xl border border-navy-600 bg-navy-900 p-5">
+      <div className="mb-3 flex gap-2">
+        <SkeletonBlock className="h-6 w-24" />
+        <SkeletonBlock className="h-6 w-40" />
+      </div>
+      <SkeletonBlock className="h-3 w-full" />
+      <SkeletonBlock className="mt-2 h-3 w-5/6" />
+      <SkeletonBlock className="mt-2 h-3 w-2/3" />
+      <div className="mt-5 border-t border-navy-700 pt-4">
+        <SkeletonBlock className="h-2.5 w-1/4" />
+        <SkeletonBlock className="mt-2 h-2 w-full" />
+      </div>
     </div>
   )
 }
@@ -58,6 +121,11 @@ export default function App() {
     }
   }
 
+  function handleRemoveFile(slotKey) {
+    const setSlot = slotKey === 'A' ? setSlotA : setSlotB
+    setSlot(EMPTY_SLOT)
+  }
+
   async function handleAnalyse() {
     if (!slotA.file || !query.trim()) return
     setAnalysing(true)
@@ -78,16 +146,18 @@ export default function App() {
 
   const canAnalyse = Boolean(slotA.file) && query.trim().length > 0
   const fallbackCentroid = slotA.meta?.centroid ?? slotB.meta?.centroid ?? null
+  const hasUpload = Boolean(slotA.file || slotB.file)
 
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="flex h-screen flex-col overflow-hidden">
       <Header backendOnline={backendOnline} />
 
-      <main className="mx-auto grid w-full max-w-[1600px] flex-1 grid-cols-1 gap-6 p-6 lg:grid-cols-[360px_1fr_420px] lg:p-8">
+      <main className="mx-auto grid w-full min-h-0 max-w-[1600px] flex-1 grid-cols-1 gap-6 overflow-hidden p-6 lg:grid-cols-[360px_1fr_420px] lg:p-8">
         <UploadPanel
           slotA={slotA}
           slotB={slotB}
           onFile={handleFile}
+          onRemoveFile={handleRemoveFile}
           query={query}
           onQueryChange={setQuery}
           onAnalyse={handleAnalyse}
@@ -95,20 +165,20 @@ export default function App() {
           canAnalyse={canAnalyse}
         />
 
-        <section className="flex flex-col gap-6">
+        <section className="flex min-h-0 flex-col gap-6 overflow-y-auto pr-1">
           {fetchError && (
             <div className="rounded-xl border border-danger/50 bg-danger/10 p-4 text-sm text-danger">
               {fetchError}
             </div>
           )}
 
-          {!response && !analysing && !fetchError && <EmptyState />}
+          {!response && !analysing && !fetchError && <EmptyState compact={!hasUpload} />}
 
           {analysing && !response && (
-            <div className="flex h-full min-h-[24rem] flex-col items-center justify-center gap-3 rounded-xl border border-navy-600 bg-navy-900">
-              <span className="h-6 w-6 animate-spin rounded-full border-2 border-navy-600 border-t-cyan-glow" />
-              <p className="text-xs text-mist-500">Running the pipeline…</p>
-            </div>
+            <>
+              <EvidenceSkeleton />
+              <AnswerSkeleton />
+            </>
           )}
 
           {response && response.rejected && <RejectionCard validations={response.validations} />}
@@ -122,13 +192,22 @@ export default function App() {
           )}
         </section>
 
-        <section className="flex flex-col gap-6">
-          <MapPanel
-            geojson={response?.geojson ?? EMPTY_GEOJSON}
-            resultVersion={resultVersion}
-            fallbackCentroid={fallbackCentroid}
-          />
-          <TraceTimeline trace={response?.trace} />
+        <section className="flex min-h-0 flex-col gap-6 overflow-y-auto pr-1">
+          {hasUpload ? (
+            <>
+              <MapPanel
+                geojson={response?.geojson ?? EMPTY_GEOJSON}
+                resultVersion={resultVersion}
+                fallbackCentroid={fallbackCentroid}
+              />
+              <TraceTimeline trace={response?.trace} pending={analysing} />
+            </>
+          ) : (
+            <div className="flex h-full min-h-[24rem] flex-col items-center justify-center rounded-xl border border-dashed border-navy-600 bg-navy-900 px-8 text-center">
+              <UploadIcon className="mb-3 h-8 w-8 text-mist-500" />
+              <p className="text-sm text-mist-300">Upload 1–2 geospatial images to begin.</p>
+            </div>
+          )}
         </section>
       </main>
     </div>

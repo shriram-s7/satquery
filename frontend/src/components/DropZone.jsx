@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { cn } from '../lib/cn'
 
-export default function DropZone({ label, sublabel, file, onFile, disabled = false }) {
+export default function DropZone({ label, sublabel, file, onFile, onRemove, disabled = false }) {
   const inputRef = useRef(null)
   const [hover, setHover] = useState(false)
 
@@ -10,9 +10,15 @@ export default function DropZone({ label, sublabel, file, onFile, disabled = fal
     if (picked) onFile(picked)
   }
 
+  function handleRemove(e) {
+    e.stopPropagation()
+    if (inputRef.current) inputRef.current.value = ''
+    onRemove?.()
+  }
+
   return (
     <div>
-      <div className="mb-1.5 flex items-baseline justify-between">
+      <div className="mb-2 flex items-baseline justify-between">
         <span className="text-xs font-semibold uppercase tracking-wide text-mist-300">{label}</span>
         {sublabel && <span className="text-[11px] text-mist-500">{sublabel}</span>}
       </div>
@@ -53,7 +59,28 @@ export default function DropZone({ label, sublabel, file, onFile, disabled = fal
           />
         </svg>
         {file ? (
-          <p className="max-w-full truncate font-mono text-xs text-mist-100">{file.name}</p>
+          <div className="flex max-w-full items-center gap-2">
+            <p className="truncate font-mono text-xs text-mist-100">{file.name}</p>
+            {!disabled && onRemove && (
+              <button
+                type="button"
+                onClick={handleRemove}
+                aria-label={`Remove ${file.name}`}
+                className="shrink-0 rounded-full p-0.5 text-mist-500 transition-colors hover:bg-danger/10 hover:text-danger"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  className="h-3.5 w-3.5"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+          </div>
         ) : (
           <p className="text-xs text-mist-500">
             Drag &amp; drop, or <span className="text-cyan-glow">browse</span>

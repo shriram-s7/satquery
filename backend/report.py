@@ -118,6 +118,42 @@ def _flowable_image(png_bytes: bytes, max_width_mm: float = 150.0) -> RLImage:
     return rl_img
 
 
+EVIDENCE_COL_WIDTH_MM = 80.0
+EVIDENCE_COL_GUTTER_MM = 6.0
+
+
+def _evidence_table(images: List[Dict[str, Any]], overlay_regions: List[Dict[str, Any]]) -> Optional[Table]:
+    cells = []
+    for img in images:
+        regions = _regions_for_image(overlay_regions, img.get("filename", ""))
+        png_bytes = _render_overlay_png(img, regions)
+        if not png_bytes:
+            continue
+        cells.append([
+            Paragraph(_esc(img.get("filename", "")), MONO_STYLE),
+            _flowable_image(png_bytes, max_width_mm=EVIDENCE_COL_WIDTH_MM),
+        ])
+
+    if not cells:
+        return None
+
+    rows = [cells[i:i + 2] for i in range(0, len(cells), 2)]
+    for row in rows:
+        if len(row) == 1:
+            row.append([])
+
+    col_width = (EVIDENCE_COL_WIDTH_MM + EVIDENCE_COL_GUTTER_MM) * mm
+    table = Table(rows, colWidths=[col_width, col_width], hAlign="LEFT")
+    table.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), EVIDENCE_COL_GUTTER_MM * mm),
+        ("TOPPADDING", (0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+    ]))
+    return table
+
+
 def build_report_pdf(response: Dict[str, Any], images: Optional[List[Dict[str, Any]]] = None) -> bytes:
     images = images or []
     buf = BytesIO()
@@ -181,14 +217,11 @@ def build_report_pdf(response: Dict[str, Any], images: Optional[List[Dict[str, A
         overlay_regions = response.get("overlay_regions") or []
 
         if images:
-            story.append(Paragraph("Evidence", HEADING_STYLE))
-            for img in images:
-                regions = _regions_for_image(overlay_regions, img.get("filename", ""))
-                png_bytes = _render_overlay_png(img, regions)
-                if png_bytes:
-                    story.append(Paragraph(_esc(img.get("filename", "")), MONO_STYLE))
-                    story.append(_flowable_image(png_bytes))
-                    story.append(Spacer(1, 8))
+            evidence_table = _evidence_table(images, overlay_regions)
+            if evidence_table:
+                story.append(Paragraph("Evidence", HEADING_STYLE))
+                story.append(evidence_table)
+                story.append(Spacer(1, 4))
 
         if overlay_regions:
             story.append(Paragraph("Detected regions", HEADING_STYLE))

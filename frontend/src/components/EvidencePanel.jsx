@@ -27,7 +27,7 @@ export default function EvidencePanel({ slotA, slotB, overlayRegions }) {
                 type="button"
                 onClick={() => setActive(slotKey)}
                 className={cn(
-                  'px-2.5 py-1 transition-colors',
+                  'px-3 py-1 transition-colors',
                   active === slotKey ? 'bg-cyan-glow text-navy-950' : 'bg-navy-850 text-mist-300 hover:bg-navy-700',
                 )}
               >

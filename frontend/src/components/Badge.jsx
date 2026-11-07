@@ -14,7 +14,7 @@ export default function Badge({ modality }) {
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1.5 rounded-md border border-teal-glow/30 bg-teal-glow/10',
+        'inline-flex items-center gap-2 rounded-md border border-teal-glow/30 bg-teal-glow/10',
         'px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-teal-glow',
       )}
     >

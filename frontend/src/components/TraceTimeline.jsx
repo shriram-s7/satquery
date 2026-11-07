@@ -12,7 +12,7 @@ const STEP_LABEL = {
   compute_confidence: 'Compute confidence',
 }
 
-export default function TraceTimeline({ trace }) {
+export default function TraceTimeline({ trace, pending = false }) {
   const [visibleCount, setVisibleCount] = useState(0)
 
   useEffect(() => {
@@ -24,7 +24,7 @@ export default function TraceTimeline({ trace }) {
       i += 1
       setVisibleCount(i)
       if (i >= trace.length) clearInterval(id)
-    }, 130)
+    }, 120)
 
     return () => clearInterval(id)
   }, [trace])
@@ -32,7 +32,17 @@ export default function TraceTimeline({ trace }) {
   return (
     <div className="rounded-xl border border-navy-600 bg-navy-900 p-4">
       <h3 className="mb-4 text-xs font-semibold uppercase tracking-wide text-mist-300">Execution trace</h3>
-      {!trace?.length ? (
+      {pending && !trace?.length ? (
+        <ol className="space-y-5">
+          {[0, 1, 2, 3].map((i) => (
+            <li key={i} className="relative animate-pulse pl-6">
+              <span className="absolute left-0 top-1 h-2.5 w-2.5 rounded-full bg-navy-600" />
+              <div className="h-2.5 w-1/3 rounded bg-navy-700" />
+              <div className="mt-2 h-2 w-4/5 rounded bg-navy-700/70" />
+            </li>
+          ))}
+        </ol>
+      ) : !trace?.length ? (
         <p className="text-xs text-mist-500">No query run yet.</p>
       ) : (
         <ol>
